@@ -1,0 +1,12 @@
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+.vite/
+.env
+.env.*
+!.env.example
+# Pruebas E2E (Playwright): build aislado, resultados e informes locales.
+dist-e2e/
+test-results/
+playwright-report/

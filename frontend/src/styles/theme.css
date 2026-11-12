@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/*
+ * Tokens de «HabiCapital - Diseño Web» (Figma, extraídos en la etapa 0 con get_design_context).
+ * Se eliminan las paletas y fuentes por defecto de Tailwind: solo existen los valores del diseño.
+ */
+@theme {
+  --color-*: initial;
+  --font-*: initial;
+
+  /* Superficies */
+  --color-canvas: #101820;
+  --color-surface: #1b2933;
+  --color-surface-sunken: #16222b;
+  --color-field: #101820;
+
+  /* Bordes */
+  --color-line: #263847;
+  --color-line-strong: #2e4354;
+
+  /* Texto */
+  --color-ink: #f5f7f8;
+  --color-ink-active: #ffffff;
+  --color-ink-muted: #cbd5e1;
+  --color-ink-subtle: #94a3b8;
+  --color-ink-placeholder: #64748b;
+
+  /* Acento */
+  --color-accent: #c7ff58;
+  --color-on-accent: #101820;
+
+  /* Estados de solicitud y montos */
+  --color-pending-bg: #3d3314;
+  --color-pending-border: #786415;
+  --color-pending-dot: #facc15;
+  --color-pending-text: #fde047;
+
+  --color-accepted-bg: #182c1e;
+  --color-accepted-border: #2e5832;
+  --color-accepted-text: #c7ff58;
+
+  --color-rejected-bg: #361a1d;
+  --color-rejected-border: #68272c;
+  --color-rejected-dot: #f87171;
+  --color-rejected-text: #fca5a5;
+  --color-negative: #f87171;
+  /* Fondo del icono de «Transferencia enviada» en Movimientos (Figma 05). */
+  --color-outgoing-bg: #2a1618;
+  /* Borde del aviso «Regla de seguridad» de Mi cuenta (fondo #16222B). */
+  --color-danger-soft-border: #4d1d23;
+
+  --color-cancelled-bg: #1f2937;
+  --color-cancelled-border: #374151;
+  --color-cancelled-dot: #6b7280;
+  --color-cancelled-text: #9ca3af;
+
+  /* Tipografía: Manrope autoalojada (OFL-1.1) y monoespaciada para UUID y código */
+  --font-sans: "Manrope Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Liberation Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  --text-display: 36px;
+  --text-display--line-height: 45px;
+  --text-display--letter-spacing: -0.9px;
+  --text-display--font-weight: 800;
+
+  --text-section: 22px;
+  --text-section--line-height: 33px;
+
+  --text-card-title: 18px;
+  --text-card-title--line-height: 27px;
+
+  --text-title: 16px;
+  --text-title--line-height: 24px;
+
+  --text-body: 14px;
+  --text-body--line-height: 21px;
+
+  --text-body-sm: 13px;
+  --text-body-sm--line-height: 19.5px;
+
+  --text-caption: 12px;
+  --text-caption--line-height: 18px;
+
+  --text-overline: 11px;
+  --text-overline--line-height: 16.5px;
+  /* Sin tracking por defecto: las etiquetas en mayúsculas añaden tracking-[0.55px] explícito. */
+
+  --text-amount: 20px;
+  --text-amount--line-height: 30px;
+
+  --text-amount-header: 22px;
+  --text-amount-header--line-height: 33px;
+
+  /* Radios */
+  --radius-card: 20px;
+  --radius-control: 16px;
+  --radius-tab: 12px;
+  --radius-pill: 9999px;
+
+  /* Sombras */
+  --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-accent: 0 4px 8px 0 rgb(199 255 88 / 0.15);
+
+  /* Distribución de escritorio (1440 px): barra lateral y área principal */
+  --spacing-sidebar: 280px;
+  --container-main: 1160px;
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-body);
+    line-height: var(--text-body--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+}
