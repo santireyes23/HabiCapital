@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-habicapital}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-habicapital}
+      POSTGRES_DB: ${POSTGRES_DB:-habicapital}
+    ports:
+      # Solo accesible desde esta máquina: la contraseña por defecto es ficticia y conocida.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # Desde PostgreSQL 18 el volumen de la imagen oficial es /var/lib/postgresql.
+      - pgdata:/var/lib/postgresql
+      # Crea la base habicapital_test la primera vez que arranca el volumen.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+volumes:
+  pgdata:
