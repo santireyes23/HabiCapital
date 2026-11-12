@@ -36,9 +36,9 @@ Todo el dinero es **simulado**: no hay pasarela de pagos ni dinero real.
 | Etapa 3 del backend: transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
 | Etapa 4 del backend: historial de movimientos | Sí | Sí: PostgreSQL 18 local y en CI (incluye aislamiento entre cuentas, paginación y lecturas concurrentes). |
 | Etapa 5 del backend: solicitudes de dinero | Sí | Sí: PostgreSQL 18 local y en CI (incluye permisos, idempotencia, atomicidad, concurrencia y protección de estados finales en la BD). |
-| Frontend web (siete pantallas) | Sí | **Solo local:** 393 pruebas (Vitest), 39 E2E (Playwright) contra FastAPI y PostgreSQL reales, accesibilidad y responsive. El CI del frontend está configurado y se verificará en su primera ejecución en GitHub. |
+| Frontend web (siete pantallas) | Sí | Sí: local y en GitHub Actions (CI #9): 393 pruebas (Vitest) y 39 E2E (Playwright) contra FastAPI y PostgreSQL reales, con accesibilidad, responsive y seguridad. |
 
-**Integración continua del backend** (las etapas son las de la tabla anterior): todas las ejecuciones de GitHub Actions terminaron
+**Integración continua** (las etapas son las de la tabla anterior; desde el CI #9 también se ejecutan los jobs `frontend` y `e2e`): todas las ejecuciones de GitHub Actions terminaron
 correctamente, con PostgreSQL 18 como servicio:
 
 | Ejecución | Commit | Cubre | pytest |
@@ -50,12 +50,15 @@ correctamente, con PostgreSQL 18 como servicio:
 | CI #5 | `8104660` | Etapas 0–4 | **144 de 144 aprobadas, 0 omitidas** |
 | CI #6 | `0c2d16b` | Etapas 0–4 (solo cambió el README) | 144 de 144 aprobadas, 0 omitidas |
 | CI #7 | `d16ff67` | Etapas 0–5 | **330 de 330 aprobadas, 0 omitidas** |
+| CI #9 | `9c46da7` | Etapas 0–5 + frontend web (primer CI con los jobs `frontend` y `e2e`) | 330 de 330 aprobadas, 0 omitidas; además Vitest 393 de 393 y Playwright 39 aprobadas, 3 omitidas a propósito |
 
 En cada ejecución, Ruff (formato y lint) y mypy estricto (`src`, `tests`, `migrations`) pasaron
 sin errores, y las migraciones Alembic (`upgrade head`) se aplicaron. Ninguna prueba se saltó:
 el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD.
 Además, en local pasaron las 330 pruebas con `HABICAPITAL_REQUIRE_DB=1` y las migraciones desde
 cero y con downgrade (el CI solo aplica `upgrade head`).
+
+En el CI #9 los tres jobs (`checks`, `frontend` y `e2e`) terminaron correctamente; los recuentos son los de ese commit, verificado también en local.
 
 "Verificado" significa que la suite pasa en mi máquina y en el CI.
 
