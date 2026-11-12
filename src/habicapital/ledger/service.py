@@ -17,10 +17,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from habicapital.accounts.models import FUNDING_ACCOUNT_ID, Account, AccountKind
-from habicapital.errors import AccountNotFoundError, InsufficientFundsError
+from habicapital.errors import (
+    AccountNotFoundError,
+    DestinationNotFoundError,
+    InsufficientFundsError,
+    SelfTransferError,
+)
 from habicapital.ledger.models import LedgerEntry, LedgerTransaction, TransactionKind
 
 MAX_DEPOSIT_COP = 10_000_000
+MAX_TRANSFER_COP = 10_000_000
 
 
 @dataclass(frozen=True)
@@ -90,5 +96,32 @@ def deposit(
         session,
         TransactionKind.DEPOSIT,
         [Leg(FUNDING_ACCOUNT_ID, -amount), Leg(account_id, amount)],
+        description,
+    )
+
+
+def transfer(
+    session: Session,
+    from_account_id: uuid.UUID,
+    to_account_id: uuid.UUID,
+    amount: int,
+    description: str | None,
+) -> LedgerTransaction:
+    """Transferencia entre dos cuentas de usuario.
+
+    El origen es siempre la cuenta autenticada (lo decide el router, nunca el cliente).
+    La existencia y el tipo de una cuenta no cambian (no se borran cuentas), así que validar
+    el destino antes del bloqueo no abre una condición de carrera. El saldo, en cambio, solo
+    se comprueba dentro de post_transaction, con las dos filas ya bloqueadas.
+    """
+    if to_account_id == from_account_id:
+        raise SelfTransferError
+    destination = session.get(Account, to_account_id)
+    if destination is None or destination.kind != AccountKind.USER:
+        raise DestinationNotFoundError
+    return post_transaction(
+        session,
+        TransactionKind.TRANSFER,
+        [Leg(from_account_id, -amount), Leg(to_account_id, amount)],
         description,
     )

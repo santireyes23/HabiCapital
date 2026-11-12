@@ -12,13 +12,14 @@ DESCRIPTION_MAX_LENGTH = 140
 
 class TransactionKind(StrEnum):
     DEPOSIT = "DEPOSIT"
+    TRANSFER = "TRANSFER"
 
 
 class LedgerTransaction(Base):
     """Un hecho contable. Inmutable: nunca se actualiza ni se borra."""
 
     __tablename__ = "ledger_transactions"
-    __table_args__ = (CheckConstraint("kind IN ('DEPOSIT')", name="kind_is_valid"),)
+    __table_args__ = (CheckConstraint("kind IN ('DEPOSIT', 'TRANSFER')", name="kind_is_valid"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     kind: Mapped[str] = mapped_column(String(20))

@@ -27,6 +27,17 @@ class AccountNotFoundError(DomainError):
     detail: ClassVar[str] = "Cuenta no encontrada"
 
 
+class DestinationNotFoundError(AccountNotFoundError):
+    """El destino no existe o es una cuenta de sistema (p. ej. FUNDING)."""
+
+    detail: ClassVar[str] = "Cuenta de destino no encontrada"
+
+
+class SelfTransferError(DomainError):
+    status_code: ClassVar[int] = 422
+    detail: ClassVar[str] = "No puedes transferirte a tu propia cuenta"
+
+
 class InsufficientFundsError(DomainError):
     status_code: ClassVar[int] = 409
     detail: ClassVar[str] = "Saldo insuficiente"

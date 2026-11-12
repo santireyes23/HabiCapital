@@ -5,7 +5,7 @@ from typing import Annotated
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from habicapital.ledger.models import DESCRIPTION_MAX_LENGTH
-from habicapital.ledger.service import MAX_DEPOSIT_COP
+from habicapital.ledger.service import MAX_DEPOSIT_COP, MAX_TRANSFER_COP
 
 # strict: rechaza 100.5, "100" y true. El dinero solo entra como entero de pesos COP.
 DepositAmount = Annotated[
@@ -29,4 +29,28 @@ class DepositRead(BaseModel):
     amount: int
     description: str | None
     balance: int = Field(description="Saldo de la cuenta después del depósito")
+    created_at: datetime
+
+
+TransferAmount = Annotated[
+    int,
+    Field(strict=True, gt=0, le=MAX_TRANSFER_COP, description="Pesos COP enteros, sin decimales"),
+]
+
+
+class TransferCreate(BaseModel):
+    # extra="forbid": el cliente no puede indicar la cuenta de origen (es siempre la suya).
+    model_config = ConfigDict(extra="forbid")
+
+    to_account_id: uuid.UUID
+    amount: TransferAmount
+    description: Description | None = None
+
+
+class TransferRead(BaseModel):
+    transaction_id: uuid.UUID
+    to_account_id: uuid.UUID
+    amount: int
+    description: str | None
+    balance: int = Field(description="Saldo de TU cuenta después de la transferencia")
     created_at: datetime

@@ -143,6 +143,22 @@ def deposit_request(
     return response
 
 
+def transfer_request(
+    client: TestClient,
+    token: str,
+    to_account_id: object,
+    amount: object,
+    key: str | None = None,
+    description: str | None = None,
+) -> Response:
+    body: dict[str, object] = {"to_account_id": to_account_id, "amount": amount}
+    if description is not None:
+        body["description"] = description
+    headers = bearer(token) | {"Idempotency-Key": key or str(uuid.uuid4())}
+    response: Response = client.post("/accounts/me/transfers", json=body, headers=headers)
+    return response
+
+
 def assert_ledger_is_consistent(engine: Engine) -> None:
     """Invariantes de "no se pierde ni se crea un peso", verificadas directamente en la BD."""
     with engine.connect() as connection:

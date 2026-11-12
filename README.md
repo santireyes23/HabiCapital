@@ -10,10 +10,11 @@
 | 0. Estructura, tooling, CI | Sí | Sí: local y en GitHub Actions. |
 | 1. Identidad (cuentas y tokens) | Sí | Sí: PostgreSQL 18 local y en CI. |
 | 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
-| 3+. Transferencias, historial, dividir la cuenta | No | No |
+| 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local (117 de 117 pruebas). En CI: pendiente del próximo push. |
+| 4+. Historial, dividir la cuenta | No | No |
 
-**Integración continua:** la primera ejecución de GitHub Actions (CI #1, commit `45adf5c`)
-terminó correctamente, con PostgreSQL 18 como servicio:
+**Integración continua:** las ejecuciones CI #1 (`45adf5c`) y CI #2 (`5e27c55`) de GitHub
+Actions terminaron correctamente, con PostgreSQL 18 como servicio:
 
 - Ruff (formato y lint): sin errores.
 - mypy estricto (`src`, `tests`, `migrations`): sin errores.
@@ -21,7 +22,10 @@ terminó correctamente, con PostgreSQL 18 como servicio:
 - pytest: **77 de 77 pruebas aprobadas**, sin pruebas saltadas (el CI usa
   `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD).
 
-"Verificado" significa que la suite pasa en mi máquina y en el CI.
+Esas ejecuciones cubren hasta la etapa 2. La etapa 3 pasa localmente con
+`HABICAPITAL_REQUIRE_DB=1`: **117 de 117 pruebas**, Ruff y mypy sin errores.
+
+"Verificado" significa que la suite pasa en mi máquina y, donde se indica, en el CI.
 
 ## Cómo no se pierde un peso (hasta ahora)
 
@@ -44,10 +48,39 @@ terminó correctamente, con PostgreSQL 18 como servicio:
 - **Defensas en la BD:** `CHECK` impide saldos negativos de usuario, asientos en 0 y cuentas de
   sistema con token (FUNDING no puede autenticarse).
 
+### Transferencias (`POST /accounts/me/transfers`)
+
+- **Origen = cuenta autenticada.** El cuerpo solo trae `to_account_id`, `amount` (entero de
+  1 a 10.000.000 COP) y `description`; un campo `from_account_id` se rechaza con `422`.
+- **Destino:** transferirse a sí mismo da `422`; un destino inexistente o una cuenta de sistema
+  (FUNDING) da `404`. Como los ids son UUID aleatorios, el `404` revela si un id existe solo a
+  quien ya lo conoce.
+- **Saldo:** se comprueba con las dos filas ya bloqueadas; si no alcanza, `409` y no se escribe
+  nada. El `CHECK` de la BD es la última defensa.
+- **Atomicidad y doble partida:** débito, crédito, ambos saldos y el registro de idempotencia van
+  en un solo `COMMIT`. Una prueba hace fallar la operación tras escribir los asientos y
+  comprueba que ningún saldo cambió.
+- **Idempotencia:** la misma que en depósitos. Una clave usada en un depósito no sirve para una
+  transferencia (`422`). 10 peticiones simultáneas con la misma clave producen una sola
+  transferencia.
+- **Concurrencia, probada:**
+  - con 5.000 de saldo, 10 transferencias simultáneas de 1.000 dan exactamente 5 aprobadas y
+    5 rechazadas (`409`), y el saldo final es 0;
+  - 30 transferencias cruzadas A↔B en paralelo terminan sin errores ni deadlocks;
+  - 20 transferencias de 5 emisores a un mismo receptor no pierden ningún crédito.
+- **Pruebas de mutación** (introduje cada error a propósito, comprobé que las pruebas fallan y
+  restauré el código):
+  - sin `FOR UPDATE`: fallan las 3 pruebas de concurrencia;
+  - bloqueando en el orden de los asientos en lugar de por id: falla la de transferencias
+    cruzadas, y PostgreSQL registró 16 deadlocks (0 con el código correcto);
+  - sin `populate_existing`: fallan las 3 pruebas de concurrencia.
+
 **Limitaciones:** todos los depósitos bloquean la fila de FUNDING, así que se serializan entre sí
 (suficiente para este alcance, un cuello de botella a escala). Solo se guardan respuestas
-exitosas para idempotencia: un rechazo no consume la clave. Los registros de idempotencia no
-expiran.
+exitosas para idempotencia: un rechazo (p. ej. saldo insuficiente) no consume la clave y un
+reintento se vuelve a evaluar. Los registros de idempotencia no expiran. Revertir la migración
+de transferencias se niega a continuar si ya hay transferencias registradas, porque borrarlas
+descuadraría los saldos.
 
 API para que un grupo de personas se mueva plata entre sí sin pasar por el banco, guardando el
 contexto de cada movimiento (el cumpleaños, el arriendo, la cuenta dividida de la cena).
