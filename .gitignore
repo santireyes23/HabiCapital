@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+
+# Herramientas
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.coverage
+htmlcov/
+*.log
+
+# Secretos y configuración local (nunca al repo público)
+.env
+.env.*
+!.env.example
+.mcp.json
+.claude/settings.local.json
+# Memorias de Serena: notas de trabajo con detalles del entorno local
+.serena/memories/
+
+# Editores / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

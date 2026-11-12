@@ -1,0 +1,63 @@
+[project]
+name = "habicapital"
+version = "0.1.0"
+description = "Billetera P2P con libro mayor de doble entrada (reto técnico HabiCapital 2027)"
+authors = [
+    { name = "santireyes23" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.20.1",
+    "fastapi>=0.162.4",
+    "psycopg[binary]>=3.3.8",
+    "pydantic-settings>=2.16.2",
+    "sqlalchemy>=2.0,<3",
+    "uvicorn>=0.54.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "hypothesis>=6.170.15",
+    "mypy>=2.4.1",
+    "pytest>=9.2.0",
+    "ruff>=0.17.4",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle
+    "F",       # pyflakes
+    "I",       # isort
+    "B",       # bugbear
+    "UP",      # pyupgrade
+    "SIM",     # simplify
+    "C4",      # comprehensions
+    "DTZ",     # datetimes con zona horaria
+    "RUF",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Por defecto solo src. Revisión completa: `uv run mypy src tests migrations` (así corre el CI).
+files = ["src"]
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# --tb=short: las trazas largas imprimen los argumentos de cada función, y los del driver
+# de PostgreSQL incluyen la contraseña de conexión.
+addopts = ["-ra", "--strict-markers", "--strict-config", "--tb=short"]
+markers = [
+    "db: requiere PostgreSQL (docker compose up -d db)",
+]
