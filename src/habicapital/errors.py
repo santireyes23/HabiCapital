@@ -62,6 +62,13 @@ class MoneyRequestNotFoundError(DomainError):
     detail: ClassVar[str] = "Solicitud no encontrada"
 
 
+class MoneyRequestNotPendingError(DomainError):
+    """La solicitud ya fue aceptada, rechazada o cancelada: solo se resuelve una vez."""
+
+    status_code: ClassVar[int] = 409
+    detail: ClassVar[str] = "La solicitud ya no está pendiente"
+
+
 class IdempotencyKeyReusedError(DomainError):
     status_code: ClassVar[int] = 422
     detail: ClassVar[str] = "La Idempotency-Key ya se usó con una solicitud distinta"

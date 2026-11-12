@@ -104,3 +104,25 @@ def get_my_money_request(
 ) -> MoneyRequestRead:
     """Una solicitud en la que participas, como solicitante o como destinatario."""
     return service.get_money_request(session, account.id, request_id)
+
+
+RESOLVE_RESPONSES: dict[int | str, dict[str, Any]] = UNAUTHORIZED | {
+    404: {"description": "No existe o no te corresponde esta acción"},
+    409: {"description": "La solicitud ya fue aceptada, rechazada o cancelada"},
+}
+
+
+@router.post("/{request_id}/reject", responses=RESOLVE_RESPONSES)
+def reject_money_request(
+    request_id: uuid.UUID, account: CurrentAccount, session: SessionDep
+) -> MoneyRequestRead:
+    """Rechaza una solicitud que te hicieron. Solo el destinatario puede. No mueve dinero."""
+    return service.reject_money_request(session, account.id, request_id)
+
+
+@router.post("/{request_id}/cancel", responses=RESOLVE_RESPONSES)
+def cancel_money_request(
+    request_id: uuid.UUID, account: CurrentAccount, session: SessionDep
+) -> MoneyRequestRead:
+    """Cancela una solicitud que tú hiciste. Solo el solicitante puede. No mueve dinero."""
+    return service.cancel_money_request(session, account.id, request_id)

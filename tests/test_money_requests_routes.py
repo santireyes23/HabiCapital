@@ -9,6 +9,8 @@ MONEY_REQUEST_ROUTES = [
     ("POST", "/money-requests"),
     ("GET", "/money-requests"),
     ("GET", "/money-requests/{request_id}"),
+    ("POST", "/money-requests/{request_id}/reject"),
+    ("POST", "/money-requests/{request_id}/cancel"),
 ]
 
 
@@ -63,6 +65,8 @@ def test_money_moving_routes_require_an_idempotency_key(client: TestClient, path
         ("POST", "/money-requests"),
         ("GET", "/money-requests?role=sent"),
         ("GET", "/money-requests/00000000-0000-0000-0000-0000000000aa"),
+        ("POST", "/money-requests/00000000-0000-0000-0000-0000000000aa/reject"),
+        ("POST", "/money-requests/00000000-0000-0000-0000-0000000000aa/cancel"),
     ],
 )
 def test_missing_token_is_rejected(client: TestClient, method: str, path: str) -> None:

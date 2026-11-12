@@ -6,16 +6,27 @@ transferencia normal de `habicapital.ledger.service`.
 
 Autorización: la cuenta propia la decide siempre el router a partir del token. Cada consulta
 filtra por esa cuenta, así que una solicitud ajena es indistinguible de una inexistente (404).
+
+Resolver (rechazar, cancelar): se bloquea la fila de la solicitud con SELECT ... FOR UPDATE y
+el estado se comprueba DESPUÉS de obtener el bloqueo. Si dos operaciones llegan a la vez, la
+segunda espera a que la primera confirme, relee la fila y ve que ya no está PENDING (409).
+Orden de bloqueo global: primero la solicitud y después, si hace falta, las cuentas. Ningún
+camino bloquea cuentas y luego solicitudes, así que no hay ciclos de espera.
 """
 
 import uuid
 from typing import Any
 
-from sqlalchemy import or_, select, text
+from sqlalchemy import ColumnElement, func, or_, select, text
 from sqlalchemy.orm import Session, aliased
 
 from habicapital.accounts.models import Account, AccountKind
-from habicapital.errors import MoneyRequestNotFoundError, PayerNotFoundError, SelfMoneyRequestError
+from habicapital.errors import (
+    MoneyRequestNotFoundError,
+    MoneyRequestNotPendingError,
+    PayerNotFoundError,
+    SelfMoneyRequestError,
+)
 from habicapital.ledger.schemas import Counterparty
 from habicapital.money_requests.models import MoneyRequest, MoneyRequestStatus
 from habicapital.money_requests.schemas import (
@@ -176,4 +187,67 @@ def list_money_requests(
     items = [_row_to_read(row) for row in rows if row.id is not None]
     return MoneyRequestPage(
         items=items, total=total, limit=limit, offset=offset, order=order, role=role, status=status
+    )
+
+
+def _lock_request(
+    session: Session, request_id: uuid.UUID, allowed: ColumnElement[bool]
+) -> MoneyRequest:
+    """Bloquea la solicitud si la cuenta autenticada puede actuar sobre ella (`allowed`).
+
+    Sin permiso responde lo mismo que si no existiera (404). `populate_existing` garantiza que
+    el estado leído es el de la fila YA bloqueada, no uno cargado antes en la sesión.
+    """
+    request = session.scalars(
+        select(MoneyRequest)
+        .where(MoneyRequest.id == request_id, allowed)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one_or_none()
+    if request is None:
+        raise MoneyRequestNotFoundError
+    return request
+
+
+def _close(
+    session: Session,
+    account_id: uuid.UUID,
+    request_id: uuid.UUID,
+    allowed: ColumnElement[bool],
+    new_status: MoneyRequestStatus,
+) -> MoneyRequestRead:
+    """Pasa una solicitud PENDING a un estado final sin mover dinero (no toca cuentas ni ledger)."""
+    request = _lock_request(session, request_id, allowed)
+    if request.status != MoneyRequestStatus.PENDING:
+        raise MoneyRequestNotPendingError
+    request.status = new_status
+    request.resolved_at = func.now()
+    session.commit()
+    # El estado ya es final: releerla después de confirmar no puede dar otro resultado.
+    return get_money_request(session, account_id, request_id)
+
+
+def reject_money_request(
+    session: Session, account_id: uuid.UUID, request_id: uuid.UUID
+) -> MoneyRequestRead:
+    """Solo el pagador rechaza."""
+    return _close(
+        session,
+        account_id,
+        request_id,
+        MoneyRequest.payer_account_id == account_id,
+        MoneyRequestStatus.REJECTED,
+    )
+
+
+def cancel_money_request(
+    session: Session, account_id: uuid.UUID, request_id: uuid.UUID
+) -> MoneyRequestRead:
+    """Solo el solicitante cancela."""
+    return _close(
+        session,
+        account_id,
+        request_id,
+        MoneyRequest.requester_account_id == account_id,
+        MoneyRequestStatus.CANCELLED,
     )
