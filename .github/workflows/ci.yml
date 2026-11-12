@@ -57,3 +57,97 @@ jobs:
 
       - name: Pruebas
         run: uv run pytest
+
+  frontend:
+    name: Frontend (lint, tipos, pruebas y build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npm run typecheck
+
+      - name: Pruebas (Vitest)
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  e2e:
+    name: E2E (Playwright + FastAPI + PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: [checks, frontend]
+
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_USER: habicapital
+          POSTGRES_PASSWORD: habicapital
+          POSTGRES_DB: habicapital_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U habicapital -d habicapital_test"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+
+    env:
+      # Solo la URL de pruebas. HABICAPITAL_DATABASE_URL no se define a propósito:
+      # frontend/e2e/backend.py exige la base local habicapital_test, distinta de la de
+      # desarrollo, y confirma current_database() antes de migrar o arrancar.
+      HABICAPITAL_TEST_DATABASE_URL: postgresql+psycopg://habicapital:habicapital@localhost:5432/habicapital_test
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Instalar uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+
+      - name: Instalar dependencias del backend
+        run: uv sync --locked
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias del frontend
+        working-directory: frontend
+        run: npm ci
+
+      - name: Instalar Chromium para Playwright
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas E2E
+        working-directory: frontend
+        run: npm run test:e2e
+
+      - name: Informe de Playwright (solo si falla)
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
