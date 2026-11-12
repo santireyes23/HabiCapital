@@ -1,7 +1,7 @@
 """Casos de uso de las solicitudes de dinero.
 
 Crear una solicitud NO mueve dinero: solo inserta una fila PENDING. No toca saldos ni el
-ledger, y no bloquea cuentas. El dinero se mueve únicamente al aceptarla (otra etapa), con la
+ledger, y no bloquea cuentas. El dinero se mueve únicamente al aceptarla, con la
 transferencia normal de `habicapital.ledger.service`.
 
 Autorización: la cuenta propia la decide siempre el router a partir del token. Cada consulta
@@ -27,9 +27,11 @@ from habicapital.errors import (
     PayerNotFoundError,
     SelfMoneyRequestError,
 )
+from habicapital.ledger import service as ledger_service
 from habicapital.ledger.schemas import Counterparty
 from habicapital.money_requests.models import MoneyRequest, MoneyRequestStatus
 from habicapital.money_requests.schemas import (
+    MoneyRequestAccepted,
     MoneyRequestOrder,
     MoneyRequestPage,
     MoneyRequestRead,
@@ -251,3 +253,50 @@ def cancel_money_request(
         MoneyRequest.requester_account_id == account_id,
         MoneyRequestStatus.CANCELLED,
     )
+
+
+def lock_for_acceptance(
+    session: Session, payer_account_id: uuid.UUID, request_id: uuid.UUID
+) -> MoneyRequest:
+    """Primer paso de aceptar: bloquea la solicitud si `payer_account_id` es su pagador (404 si no).
+
+    El router lo llama ANTES de consultar la Idempotency-Key. Así, si dos aceptaciones con la
+    misma clave llegan a la vez, la segunda espera aquí a que la primera confirme y, al buscar
+    después la clave, ya ve su registro y repite su respuesta (en vez de responder 409).
+    """
+    return _lock_request(session, request_id, MoneyRequest.payer_account_id == payer_account_id)
+
+
+def accept_locked_money_request(
+    session: Session, payer: Account, request: MoneyRequest
+) -> MoneyRequestAccepted:
+    """Segundo paso: paga la solicitud ya bloqueada por `lock_for_acceptance`.
+
+    No confirma. La transferencia (que tampoco confirma), el cambio de estado y el registro de
+    idempotencia los confirma `run_idempotent` en UNA sola transacción; cualquier excepción
+    antes de eso la descarta entera al cerrar la sesión.
+
+    Orden de bloqueo: la solicitud ya está bloqueada; `transfer` bloquea después las dos cuentas
+    en orden ascendente de id. Si no hay saldo, `transfer` lanza InsufficientFundsError (409) y
+    el rollback deja la solicitud PENDING.
+    """
+    if request.status != MoneyRequestStatus.PENDING:
+        raise MoneyRequestNotPendingError
+    # La misma transferencia que POST /accounts/me/transfers: valida al destinatario, bloquea,
+    # comprueba saldo y escribe los asientos de doble partida. No hay otra lógica de dinero.
+    transaction = ledger_service.transfer(
+        session, payer.id, request.requester_account_id, request.amount, request.description
+    )
+    request.status = MoneyRequestStatus.ACCEPTED
+    request.transaction_id = transaction.id
+    request.resolved_at = func.now()
+    session.flush()
+
+    # Ya cargado (y bloqueado) por transfer: no es una consulta nueva.
+    requester = session.get(Account, request.requester_account_id)
+    if requester is None:  # pragma: no cover - la FK y el bloqueo garantizan que existe
+        raise MoneyRequestNotFoundError
+    read = _to_read(request, requester.owner_name, payer.owner_name)
+    # `payer` es la cuenta autenticada: transfer la releyó al bloquearla (populate_existing),
+    # así que su saldo es el posterior al pago.
+    return MoneyRequestAccepted(**read.model_dump(), balance=payer.balance)

@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from habicapital.ledger.schemas import Counterparty, Description, TransferAmount
 from habicapital.money_requests.models import MoneyRequestStatus
@@ -39,6 +39,18 @@ class MoneyRequestRead(BaseModel):
     transaction_id: uuid.UUID | None
     created_at: datetime
     resolved_at: datetime | None
+
+
+class MoneyRequestAccepted(MoneyRequestRead):
+    """Respuesta de aceptar: la solicitud y el saldo del PAGADOR (la cuenta autenticada)."""
+
+    balance: int = Field(description="Saldo de TU cuenta después de pagar la solicitud")
+
+
+class MoneyRequestAcceptance(BaseModel):
+    """Lo que identifica una aceptación para la Idempotency-Key (no viaja en el body)."""
+
+    request_id: uuid.UUID
 
 
 class MoneyRequestPage(BaseModel):

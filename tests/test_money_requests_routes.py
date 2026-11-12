@@ -11,6 +11,7 @@ MONEY_REQUEST_ROUTES = [
     ("GET", "/money-requests/{request_id}"),
     ("POST", "/money-requests/{request_id}/reject"),
     ("POST", "/money-requests/{request_id}/cancel"),
+    ("POST", "/money-requests/{request_id}/accept"),
 ]
 
 
@@ -48,7 +49,7 @@ def test_create_body_has_no_requester_field(client: TestClient) -> None:
     assert schema["additionalProperties"] is False
 
 
-@pytest.mark.parametrize("path", ["/money-requests"])
+@pytest.mark.parametrize("path", ["/money-requests", "/money-requests/{request_id}/accept"])
 def test_money_moving_routes_require_an_idempotency_key(client: TestClient, path: str) -> None:
     operation = _operations(client)[("POST", path)]
     parameters = operation["parameters"]
@@ -67,6 +68,7 @@ def test_money_moving_routes_require_an_idempotency_key(client: TestClient, path
         ("GET", "/money-requests/00000000-0000-0000-0000-0000000000aa"),
         ("POST", "/money-requests/00000000-0000-0000-0000-0000000000aa/reject"),
         ("POST", "/money-requests/00000000-0000-0000-0000-0000000000aa/cancel"),
+        ("POST", "/money-requests/00000000-0000-0000-0000-0000000000aa/accept"),
     ],
 )
 def test_missing_token_is_rejected(client: TestClient, method: str, path: str) -> None:

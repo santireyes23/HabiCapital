@@ -20,6 +20,8 @@ from habicapital.money_requests.models import MoneyRequestStatus
 from habicapital.money_requests.schemas import (
     MAX_MONEY_REQUESTS_OFFSET,
     MAX_MONEY_REQUESTS_PAGE,
+    MoneyRequestAcceptance,
+    MoneyRequestAccepted,
     MoneyRequestCreate,
     MoneyRequestOrder,
     MoneyRequestPage,
@@ -126,3 +128,47 @@ def cancel_money_request(
 ) -> MoneyRequestRead:
     """Cancela una solicitud que tú hiciste. Solo el solicitante puede. No mueve dinero."""
     return service.cancel_money_request(session, account.id, request_id)
+
+
+ACCEPT_RESPONSES: dict[int | str, dict[str, Any]] = UNAUTHORIZED | {
+    404: {"description": "No existe o no eres su destinatario"},
+    409: {
+        "description": "Saldo insuficiente (la solicitud sigue PENDING y la clave no se "
+        "consume) o la solicitud ya fue resuelta"
+    },
+    422: {"description": "Idempotency-Key inválida o reutilizada con otra operación"},
+}
+
+
+@router.post(
+    "/{request_id}/accept",
+    response_model=MoneyRequestAccepted,
+    responses=ACCEPT_RESPONSES,
+)
+def accept_money_request(
+    request_id: uuid.UUID,
+    account: CurrentAccount,
+    session: SessionDep,
+    idempotency_key: IdempotencyKey,
+) -> JSONResponse:
+    """Paga una solicitud que te hicieron: transfiere el monto desde tu cuenta al solicitante.
+
+    Reintentar con la misma Idempotency-Key devuelve la respuesta original (aunque la solicitud
+    ya esté ACCEPTED) sin volver a mover dinero.
+    """
+    # 1. Bloqueo de la solicitud ANTES de consultar la clave (ver lock_for_acceptance).
+    request = service.lock_for_acceptance(session, account.id, request_id)
+
+    # 2. Clave ya usada -> respuesta original. Si no: pago + estado + registro, un solo commit.
+    result = run_idempotent(
+        session,
+        account_id=account.id,
+        key=idempotency_key,
+        request_hash=request_fingerprint(
+            "money_request_accept", MoneyRequestAcceptance(request_id=request_id)
+        ),
+        status_code=status.HTTP_200_OK,
+        operation=lambda: service.accept_locked_money_request(session, account, request),
+    )
+    headers = {"Idempotent-Replayed": "true"} if result.replayed else None
+    return JSONResponse(status_code=result.status_code, content=result.body, headers=headers)
