@@ -197,3 +197,29 @@ def assert_ledger_is_consistent(engine: Engine) -> None:
     assert mismatched == [], "cada saldo debe ser igual a la suma de sus asientos"
     assert negative_users == [], "ninguna cuenta de usuario puede quedar en negativo"
     assert last_balance_mismatch == [], "balance_after del último asiento debe ser el saldo"
+
+
+def money_request_create(
+    client: TestClient,
+    token: str,
+    payer_account_id: object,
+    amount: object,
+    key: str | None = None,
+    description: str | None = None,
+) -> Response:
+    body: dict[str, object] = {"payer_account_id": payer_account_id, "amount": amount}
+    if description is not None:
+        body["description"] = description
+    headers = bearer(token) | {"Idempotency-Key": key or str(uuid.uuid4())}
+    response: Response = client.post("/money-requests", json=body, headers=headers)
+    return response
+
+
+def money_requests_list(client: TestClient, token: str, **params: object) -> Response:
+    response: Response = client.get("/money-requests", params=params, headers=bearer(token))
+    return response
+
+
+def money_request_get(client: TestClient, token: str, request_id: object) -> Response:
+    response: Response = client.get(f"/money-requests/{request_id}", headers=bearer(token))
+    return response

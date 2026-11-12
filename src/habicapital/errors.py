@@ -43,6 +43,25 @@ class InsufficientFundsError(DomainError):
     detail: ClassVar[str] = "Saldo insuficiente"
 
 
+class PayerNotFoundError(AccountNotFoundError):
+    """El destinatario de una solicitud no existe o es una cuenta de sistema (p. ej. FUNDING)."""
+
+    detail: ClassVar[str] = "Cuenta destinataria no encontrada"
+
+
+class SelfMoneyRequestError(DomainError):
+    status_code: ClassVar[int] = 422
+    detail: ClassVar[str] = "No puedes solicitarte dinero a ti mismo"
+
+
+class MoneyRequestNotFoundError(DomainError):
+    """La solicitud no existe o la cuenta autenticada no participa en ella. Mismo 404 en los
+    dos casos, para no confirmar que existe una solicitud ajena."""
+
+    status_code: ClassVar[int] = 404
+    detail: ClassVar[str] = "Solicitud no encontrada"
+
+
 class IdempotencyKeyReusedError(DomainError):
     status_code: ClassVar[int] = 422
     detail: ClassVar[str] = "La Idempotency-Key ya se usó con una solicitud distinta"
