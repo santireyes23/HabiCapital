@@ -21,7 +21,7 @@ uv · Ruff · mypy · Docker Compose · GitHub Actions.
 | 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
 | 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
 | 4. Historial de movimientos | Sí | Sí: PostgreSQL 18 local y en CI (incluye aislamiento entre cuentas, paginación y lecturas concurrentes). |
-| 5. Solicitudes de dinero entre usuarios | Sí | **Solo local** (PostgreSQL 18): aún no se ha subido ni ejecutado en CI. Incluye permisos, idempotencia, atomicidad, concurrencia y protección de estados finales en la BD. |
+| 5. Solicitudes de dinero entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye permisos, idempotencia, atomicidad, concurrencia y protección de estados finales en la BD). |
 
 **Integración continua:** todas las ejecuciones de GitHub Actions terminaron correctamente, con
 PostgreSQL 18 como servicio:
@@ -34,17 +34,16 @@ PostgreSQL 18 como servicio:
 | CI #4 | `9869515` | Etapas 0–3 | 117 de 117 aprobadas |
 | CI #5 | `8104660` | Etapas 0–4 | **144 de 144 aprobadas, 0 omitidas** |
 | CI #6 | `0c2d16b` | Etapas 0–4 (solo cambió el README) | 144 de 144 aprobadas, 0 omitidas |
+| CI #7 | `d16ff67` | Etapas 0–5 | **330 de 330 aprobadas, 0 omitidas** |
 
-**Etapa 5, verificación local:** 330 de 330 pruebas aprobadas, 0 omitidas, con
-`HABICAPITAL_REQUIRE_DB=1`, además de Ruff, mypy y las migraciones desde cero y con downgrade.
-Esta tabla se actualizará con la ejecución del CI cuando se suban los cambios.
+**Etapa 5:** además del CI, en local pasaron las 330 pruebas con `HABICAPITAL_REQUIRE_DB=1` y
+las migraciones desde cero y con downgrade (el CI solo aplica `upgrade head`).
 
 En cada ejecución, Ruff (formato y lint) y mypy estricto (`src`, `tests`, `migrations`) pasaron
 sin errores, y las migraciones Alembic (`upgrade head`) se aplicaron. Ninguna prueba se saltó:
 el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD.
 
-"Verificado" significa que la suite pasa en mi máquina y en el CI (salvo donde dice "solo
-local").
+"Verificado" significa que la suite pasa en mi máquina y en el CI.
 
 ## Cómo no se pierde un peso
 
