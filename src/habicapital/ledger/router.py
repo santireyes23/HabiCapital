@@ -1,14 +1,22 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Header, status
+from fastapi import APIRouter, Header, Query, status
 from fastapi.responses import JSONResponse
 
 from habicapital.accounts.dependencies import CurrentAccount
 from habicapital.db import SessionDep
 from habicapital.idempotency.models import IDEMPOTENCY_KEY_MAX_LENGTH
 from habicapital.idempotency.service import request_fingerprint, run_idempotent
-from habicapital.ledger import service
-from habicapital.ledger.schemas import DepositCreate, DepositRead, TransferCreate, TransferRead
+from habicapital.ledger import history, service
+from habicapital.ledger.schemas import (
+    MAX_MOVEMENTS_PAGE,
+    DepositCreate,
+    DepositRead,
+    MovementOrder,
+    MovementPage,
+    TransferCreate,
+    TransferRead,
+)
 
 router = APIRouter(prefix="/accounts/me", tags=["ledger"])
 
@@ -111,3 +119,25 @@ def create_transfer(
     )
     headers = {"Idempotent-Replayed": "true"} if result.replayed else None
     return JSONResponse(status_code=result.status_code, content=result.body, headers=headers)
+
+
+# Tope del offset: evita valores que desborden el entero de PostgreSQL (y un 500).
+MAX_MOVEMENTS_OFFSET = 1_000_000
+
+
+@router.get("/movements", responses={401: {"description": "Token ausente o inválido"}})
+def list_my_movements(
+    account: CurrentAccount,
+    session: SessionDep,
+    limit: Annotated[int, Query(ge=1, le=MAX_MOVEMENTS_PAGE)] = 20,
+    offset: Annotated[int, Query(ge=0, le=MAX_MOVEMENTS_OFFSET)] = 0,
+    order: Annotated[
+        MovementOrder, Query(description="desc: más reciente primero; asc: más antiguo primero")
+    ] = "desc",
+) -> MovementPage:
+    """Historial de TU cuenta: depósitos, transferencias enviadas y recibidas.
+
+    Paginado con limit/offset. Si llegan movimientos nuevos mientras recorres las páginas en
+    orden desc, las siguientes páginas se desplazan (un movimiento puede repetirse).
+    """
+    return history.list_movements(session, account.id, limit, offset, order)

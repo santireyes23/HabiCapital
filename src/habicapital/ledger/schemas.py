@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
-from typing import Annotated
+from enum import StrEnum
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
@@ -54,3 +55,49 @@ class TransferRead(BaseModel):
     description: str | None
     balance: int = Field(description="Saldo de TU cuenta después de la transferencia")
     created_at: datetime
+
+
+# --- Historial de movimientos (solo lectura) ----------------------------------------------------
+
+
+class MovementType(StrEnum):
+    DEPOSIT = "DEPOSIT"
+    TRANSFER_SENT = "TRANSFER_SENT"
+    TRANSFER_RECEIVED = "TRANSFER_RECEIVED"
+
+
+class Direction(StrEnum):
+    IN = "IN"
+    OUT = "OUT"
+
+
+MovementOrder = Literal["desc", "asc"]
+MAX_MOVEMENTS_PAGE = 100
+
+
+class Counterparty(BaseModel):
+    """Solo lo imprescindible de la otra cuenta: nunca su saldo ni nada privado."""
+
+    account_id: uuid.UUID
+    owner_name: str
+
+
+class MovementRead(BaseModel):
+    transaction_id: uuid.UUID
+    type: MovementType
+    direction: Direction
+    amount: int = Field(gt=0, description="Pesos COP, siempre positivo; el sentido lo da direction")
+    balance_after: int = Field(description="Saldo de tu cuenta justo después de este movimiento")
+    description: str | None
+    counterparty: Counterparty | None = Field(
+        description="La otra cuenta de una transferencia; null en los depósitos"
+    )
+    created_at: datetime
+
+
+class MovementPage(BaseModel):
+    items: list[MovementRead]
+    total: int = Field(description="Movimientos totales de la cuenta, no solo los de esta página")
+    limit: int
+    offset: int
+    order: MovementOrder

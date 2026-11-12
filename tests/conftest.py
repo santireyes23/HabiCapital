@@ -159,6 +159,11 @@ def transfer_request(
     return response
 
 
+def movements_request(client: TestClient, token: str, **params: object) -> Response:
+    response: Response = client.get("/accounts/me/movements", params=params, headers=bearer(token))
+    return response
+
+
 def assert_ledger_is_consistent(engine: Engine) -> None:
     """Invariantes de "no se pierde ni se crea un peso", verificadas directamente en la BD."""
     with engine.connect() as connection:

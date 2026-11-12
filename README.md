@@ -11,7 +11,8 @@
 | 1. Identidad (cuentas y tokens) | Sí | Sí: PostgreSQL 18 local y en CI. |
 | 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
 | 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
-| 4+. Historial, dividir la cuenta | No | No |
+| 4. Historial de movimientos | Sí | Sí: PostgreSQL 18 local (144 de 144 pruebas). En CI: pendiente del próximo push. |
+| 5+. Dividir la cuenta | No | No |
 
 **Integración continua:** todas las ejecuciones de GitHub Actions terminaron correctamente, con
 PostgreSQL 18 como servicio:
@@ -75,6 +76,32 @@ el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que
   - bloqueando en el orden de los asientos en lugar de por id: falla la de transferencias
     cruzadas, y PostgreSQL registró 16 deadlocks (0 con el código correcto);
   - sin `populate_existing`: fallan las 3 pruebas de concurrencia.
+
+### Historial (`GET /accounts/me/movements?limit=20&offset=0&order=desc`)
+
+- **Solo lectura y solo la cuenta propia:** la cuenta sale del token y el filtro se aplica en
+  la consulta; no hay ningún parámetro con un id de cuenta. No escribe ni bloquea filas.
+- **Sin tablas nuevas:** cada movimiento es un asiento del ledger. El tipo sale de la
+  transacción y del signo del asiento: `DEPOSIT` (`IN`), `TRANSFER_SENT` (`OUT`) y
+  `TRANSFER_RECEIVED` (`IN`). `amount` es siempre positivo; el sentido lo da `direction`.
+- **Contraparte:** en una transferencia, solo `account_id` y `owner_name` de la otra cuenta. En
+  un depósito es `null`: FUNDING nunca se muestra.
+- **Orden estable:** por el id del asiento (único y creciente), `desc` por defecto o `asc`, con
+  el índice existente `(account_id, id)`.
+- **Página y total coherentes:** salen de una sola sentencia SQL, que en PostgreSQL ve una única
+  instantánea. Una prueba lee el historial mientras corren 30 transferencias cruzadas y
+  comprueba que cada página trae exactamente `total` elementos y concilia con `balance_after`.
+- **Conciliación probada:** la suma de los movimientos (+ entradas, − salidas) es igual al
+  saldo, y en orden `asc` cada `balance_after` es el anterior más o menos el monto. Las
+  operaciones rechazadas y los reintentos idempotentes no aparecen ni se duplican.
+- **Validación:** `limit` de 1 a 100, `offset` de 0 a 1.000.000 y `order` `desc` o `asc`; fuera
+  de rango, `422`. Un `offset` más allá del final devuelve `items: []` con el `total` real.
+
+**Limitación de `limit` y `offset`:** la paginación cuenta posiciones, no movimientos. Si llegan
+movimientos nuevos mientras alguien recorre las páginas en orden `desc`, todo se desplaza hacia
+atrás y un movimiento ya visto puede aparecer de nuevo en la página siguiente (en `asc`, los
+nuevos aparecen al final). Ningún movimiento se pierde del ledger; solo cambia la vista. Una
+paginación por cursor ("los anteriores al movimiento X") lo evitaría.
 
 **Limitaciones:** todos los depósitos bloquean la fila de FUNDING, así que se serializan entre sí
 (suficiente para este alcance, un cuello de botella a escala). Solo se guardan respuestas
