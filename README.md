@@ -11,7 +11,7 @@
 | 1. Identidad (cuentas y tokens) | Sí | Sí: PostgreSQL 18 local y en CI. |
 | 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
 | 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
-| 4. Historial de movimientos | Sí | Sí: PostgreSQL 18 local (144 de 144 pruebas). En CI: pendiente del próximo push. |
+| 4. Historial de movimientos | Sí | Sí: PostgreSQL 18 local y en CI (incluye aislamiento entre cuentas, paginación y lecturas concurrentes). |
 | 5+. Dividir la cuenta | No | No |
 
 **Integración continua:** todas las ejecuciones de GitHub Actions terminaron correctamente, con
@@ -22,6 +22,8 @@ PostgreSQL 18 como servicio:
 | CI #1 | `45adf5c` | Etapas 0–2 | 77 de 77 aprobadas |
 | CI #2 | `5e27c55` | Etapas 0–2 | 77 de 77 aprobadas |
 | CI #3 | `406a471` | Etapas 0–3 | **117 de 117 aprobadas** |
+| CI #4 | `9869515` | Etapas 0–3 | 117 de 117 aprobadas |
+| CI #5 | `8104660` | Etapas 0–4 | **144 de 144 aprobadas, 0 omitidas** |
 
 En cada ejecución, Ruff (formato y lint) y mypy estricto (`src`, `tests`, `migrations`) pasaron
 sin errores, y las migraciones Alembic (`upgrade head`) se aplicaron. Ninguna prueba se saltó:
