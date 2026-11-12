@@ -1,5 +1,14 @@
 # HabiCapital: billetera P2P
 
+API para que un grupo de personas se mueva plata entre sí sin pasar por el banco, guardando el
+contexto de cada movimiento (el cumpleaños, el arriendo, la parte de la cena que alguien te pide).
+
+**Funcionalidades:** crear cuenta (con token Bearer), depósito simulado, transferencia, saldo,
+historial de movimientos y, como funcionalidad adicional, **solicitudes de dinero entre usuarios**.
+
+**Stack:** Python 3.12 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 18 · pytest · httpx ·
+uv · Ruff · mypy · Docker Compose · GitHub Actions.
+
 > **Estado: borrador en construcción.** Este README irá creciendo por etapas. La versión final
 > responderá en primera persona los ocho puntos que pide el reto.
 
@@ -12,7 +21,7 @@
 | 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
 | 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
 | 4. Historial de movimientos | Sí | Sí: PostgreSQL 18 local y en CI (incluye aislamiento entre cuentas, paginación y lecturas concurrentes). |
-| 5+. Dividir la cuenta | No | No |
+| 5. Solicitudes de dinero entre usuarios | Sí | **Solo local** (PostgreSQL 18): aún no se ha subido ni ejecutado en CI. Incluye permisos, idempotencia, atomicidad, concurrencia y protección de estados finales en la BD. |
 
 **Integración continua:** todas las ejecuciones de GitHub Actions terminaron correctamente, con
 PostgreSQL 18 como servicio:
@@ -24,14 +33,20 @@ PostgreSQL 18 como servicio:
 | CI #3 | `406a471` | Etapas 0–3 | **117 de 117 aprobadas** |
 | CI #4 | `9869515` | Etapas 0–3 | 117 de 117 aprobadas |
 | CI #5 | `8104660` | Etapas 0–4 | **144 de 144 aprobadas, 0 omitidas** |
+| CI #6 | `0c2d16b` | Etapas 0–4 (solo cambió el README) | 144 de 144 aprobadas, 0 omitidas |
+
+**Etapa 5, verificación local:** 330 de 330 pruebas aprobadas, 0 omitidas, con
+`HABICAPITAL_REQUIRE_DB=1`, además de Ruff, mypy y las migraciones desde cero y con downgrade.
+Esta tabla se actualizará con la ejecución del CI cuando se suban los cambios.
 
 En cada ejecución, Ruff (formato y lint) y mypy estricto (`src`, `tests`, `migrations`) pasaron
 sin errores, y las migraciones Alembic (`upgrade head`) se aplicaron. Ninguna prueba se saltó:
 el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD.
 
-"Verificado" significa que la suite pasa en mi máquina y en el CI.
+"Verificado" significa que la suite pasa en mi máquina y en el CI (salvo donde dice "solo
+local").
 
-## Cómo no se pierde un peso (hasta ahora)
+## Cómo no se pierde un peso
 
 - **Dinero como entero:** pesos COP en `BIGINT`/`int`. La API rechaza `100.5`, `100.0`, `"100"` y
   `true` (validación estricta), montos ≤ 0 y depósitos mayores a 10.000.000.
@@ -50,7 +65,8 @@ el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que
   respuesta original (`Idempotent-Replayed: true`) sin mover plata, también con 10 peticiones
   simultáneas; reutilizarla con otro cuerpo da `422`. La clave es única por cuenta.
 - **Defensas en la BD:** `CHECK` impide saldos negativos de usuario, asientos en 0 y cuentas de
-  sistema con token (FUNDING no puede autenticarse).
+  sistema con token (FUNDING no puede autenticarse). En las solicitudes de dinero, además, un
+  trigger hace inmutables los estados finales (ver más abajo).
 
 ### Transferencias (`POST /accounts/me/transfers`)
 
@@ -105,18 +121,102 @@ atrás y un movimiento ya visto puede aparecer de nuevo en la página siguiente 
 nuevos aparecen al final). Ningún movimiento se pierde del ledger; solo cambia la vista. Una
 paginación por cursor ("los anteriores al movimiento X") lo evitaría.
 
+### Solicitudes de dinero (`/money-requests`)
+
+Un usuario le pide una cantidad a otro; el otro la paga o la rechaza. **Crear una solicitud no
+mueve dinero**: solo aceptarla lo hace, y lo hace con la misma transferencia del ledger que
+`POST /accounts/me/transfers` (no hay una segunda lógica de dinero).
+
+| Endpoint | Quién | `Idempotency-Key` | Respuesta |
+|---|---|---|---|
+| `POST /money-requests` con `{payer_account_id, amount, description?}` | Cualquier usuario (el solicitante sale del token) | Obligatoria | `201`, estado `PENDING` |
+| `GET /money-requests?role=sent\|received&status=&limit=&offset=&order=` | Solo tus solicitudes | — | `200`, paginado |
+| `GET /money-requests/{id}` | Solicitante o pagador | — | `200` |
+| `POST /money-requests/{id}/accept` | Solo el pagador | Obligatoria | `200`, con tu saldo después de pagar |
+| `POST /money-requests/{id}/reject` | Solo el pagador | — | `200` |
+| `POST /money-requests/{id}/cancel` | Solo el solicitante | — | `200` |
+
+**Estados.** `PENDING` pasa a `ACCEPTED` (se ejecuta la transferencia), `REJECTED` o
+`CANCELLED`, y esos tres estados finales no cambian nunca. Aceptar sin saldo suficiente
+responde `409` y la solicitud sigue `PENDING`. Cualquier acción sobre una solicitud ya resuelta
+responde `409` (`"La solicitud ya no está pendiente"`). No implementé vencimiento (`EXPIRED`).
+
+**Validación al crear.** Monto entero de 1 a 10.000.000 COP (el mismo tope que una
+transferencia, para no crear solicitudes imposibles de aceptar); pedirte a ti mismo da `422`;
+un pagador inexistente o FUNDING da `404`. No se comprueba el saldo del pagador: hacerlo le
+revelaría su saldo al solicitante.
+
+**Permisos y privacidad.**
+- Las rutas van en `/money-requests` y no en `/accounts`: el id de la URL identifica una
+  solicitud, nunca una cuenta. Pruebas estructurales verifican que ninguna ruta de `/accounts`
+  reciba un id en la URL y que en `/money-requests` el único parámetro de ruta sea `request_id`.
+- Cada consulta filtra por la cuenta del token. Una solicitud ajena, o una acción que no te
+  corresponde (p. ej. que el solicitante intente aceptar su propia solicitud), responde el mismo
+  `404` que una solicitud inexistente.
+- De cada parte solo se muestran `account_id` y `owner_name`. Las respuestas nunca incluyen el
+  saldo de otra cuenta; aceptar devuelve solo el saldo del propio pagador.
+
+**Atomicidad al aceptar.** Todo va en una sola transacción de PostgreSQL: se bloquea la
+solicitud; `transfer()` bloquea las dos cuentas y escribe los asientos (no confirma por su
+cuenta); la solicitud pasa a `ACCEPTED` con su `transaction_id` y `resolved_at`; y se guarda el
+registro de idempotencia. Hay un único `COMMIT`. Las pruebas hacen fallar la operación justo
+después de la transferencia, al guardar el estado (violando un `CHECK`) y al guardar el registro
+de idempotencia: en los tres casos la solicitud queda `PENDING` y ningún saldo cambia.
+
+**Idempotencia.** Crear y aceptar usan el mismo mecanismo que depósitos y transferencias. Si la
+respuesta de una aceptación se pierde, repetirla con la misma clave devuelve la respuesta
+original (`Idempotent-Replayed: true`) aunque la solicitud ya esté `ACCEPTED`, sin una segunda
+transferencia. La misma clave con otra solicitud u otra operación da `422`. Un `409` por saldo
+insuficiente no consume la clave.
+
+**Concurrencia.** Hay un único orden de bloqueo en todo el sistema: primero la solicitud
+(`SELECT ... FOR UPDATE`) y después las cuentas, en orden ascendente de id dentro de
+`transfer()`. El estado se comprueba con la fila ya bloqueada. Al aceptar, la solicitud se
+bloquea **antes** de consultar la clave de idempotencia: así, de dos aceptaciones simultáneas
+con la misma clave, la segunda espera y repite la respuesta de la primera en lugar de recibir
+`409`. Probado:
+- 10 aceptaciones simultáneas con claves distintas: una `200`, nueve `409`, un solo débito;
+- 10 con la misma clave: diez `200` con el mismo cuerpo, nueve marcadas como repetidas;
+- la misma clave en dos solicitudes a la vez: una paga y la otra recibe `422`;
+- aceptar, rechazar y cancelar compitiendo en 12 solicitudes: exactamente un ganador por
+  solicitud, y la plata se movió si y solo si ganó aceptar;
+- con 5.000 de saldo, 10 solicitudes de 1.000 aceptadas a la vez: 5 pagadas y 5 `PENDING`;
+- 20 aceptaciones cruzadas entre dos cuentas mezcladas con 10 transferencias: sin deadlocks.
+
+**Defensas en la BD.** Los `CHECK` exigen monto positivo, solicitante distinto del pagador,
+estado válido, `transaction_id` presente si y solo si está `ACCEPTED` y `resolved_at` si y solo
+si ya no está `PENDING`; además, `transaction_id` es único (una transferencia no salda dos
+solicitudes). Un trigger (`money_requests_guard_final_states`) rechaza cualquier `UPDATE` o
+`DELETE` de una solicitud resuelta: no vuelve a `PENDING`, no pasa de un estado final a otro y
+una aceptada no pierde ni cambia su transferencia. Mientras está `PENDING`, sus partes, su monto
+y su descripción tampoco cambian. Comprobé que, si el servicio dejara de verificar el estado,
+una segunda aceptación ya no pagaría dos veces: la BD la rechaza y la transferencia se deshace.
+
+**Pruebas de mutación** (introduje cada error a propósito y restauré el código):
+- bloquear la solicitud después de consultar la clave: falla la prueba de la misma clave en
+  paralelo;
+- no verificar `PENDING` al aceptar: fallan 5 pruebas;
+- sin `FOR UPDATE` en la solicitud: fallan las de concurrencia de aceptar, rechazar y cancelar;
+- un `COMMIT` justo después de `transfer()`: fallan 6 pruebas de atomicidad y concurrencia.
+
+**Limitaciones de las solicitudes:**
+- No hay vencimiento (`EXPIRED`): una solicitud puede quedar `PENDING` indefinidamente.
+- Quien conoce tu id puede enviarte solicitudes sin límite (no hay límite de peticiones).
+- Crear una solicitud revela con `404` si un id de cuenta existe, igual que transferir; los ids
+  son UUID aleatorios.
+- Si la respuesta de una aceptación se pierde y el cliente reintenta con **otra** clave, recibe
+  `409`: no hay forma de saber que es la misma intención, así que debe reutilizar la clave.
+- Una respuesta repetida muestra el saldo del momento de la aceptación original, no el actual.
+- El listado usa `limit`/`offset`, con la misma limitación que el historial.
+- Revertir la migración de solicitudes elimina la tabla: no cambia saldos ni asientos, pero se
+  pierde el vínculo entre cada solicitud aceptada y su transferencia (que sigue en el ledger).
+
 **Limitaciones:** todos los depósitos bloquean la fila de FUNDING, así que se serializan entre sí
 (suficiente para este alcance, un cuello de botella a escala). Solo se guardan respuestas
 exitosas para idempotencia: un rechazo (p. ej. saldo insuficiente) no consume la clave y un
 reintento se vuelve a evaluar. Los registros de idempotencia no expiran. Revertir la migración
 de transferencias se niega a continuar si ya hay transferencias registradas, porque borrarlas
 descuadraría los saldos.
-
-API para que un grupo de personas se mueva plata entre sí sin pasar por el banco, guardando el
-contexto de cada movimiento (el cumpleaños, el arriendo, la cuenta dividida de la cena).
-
-**Stack:** Python 3.12 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 18 · pytest · Hypothesis ·
-uv · Ruff · mypy · Docker Compose · GitHub Actions.
 
 ## Cómo ejecutarlo (Windows / PowerShell)
 
@@ -180,8 +280,8 @@ autenticación de producción.
   viene en la petición, se deduce del token. Así no hay un id ajeno que manipular.
 - El origen de una transferencia es siempre la cuenta autenticada; el cuerpo solo trae el destino.
 - Cada caso de uso vuelve a comprobar el permiso en el servicio (no solo en el router):
-  - solo el acreedor gestiona su cuenta dividida;
-  - solo el deudor de un cobro puede pagarlo.
+  - solo el pagador de una solicitud de dinero puede aceptarla o rechazarla;
+  - solo quien la creó puede cancelarla.
 - Un recurso ajeno responde `404`, no `403`, para no confirmar que existe.
 
 ### El token nunca se persiste en claro
@@ -189,16 +289,17 @@ autenticación de producción.
 - **Base de datos:** solo el hash. Un `CHECK` exige 64 caracteres, así que la propia BD rechaza
   guardar algo que no sea un hash SHA-256.
 - **Idempotencia:** crear cuenta y regenerar token no pasan por los registros de idempotencia
-  (que llegarán con los depósitos). Las respuestas con token nunca se guardan para repetirlas.
+  (solo los usan depósitos, transferencias y solicitudes de dinero). Las respuestas con token
+  nunca se guardan para repetirlas.
 - **Logs:** no se registran cabeceras ni cuerpos de las peticiones; el token nunca se acepta en
   la URL. El motor de BD usa `hide_parameters=True`, así que los valores de las sentencias no
   aparecen en logs ni en mensajes de error.
 - **Cachés:** las respuestas con token llevan `Cache-Control: no-store`.
-- **Pruebas** (las marcadas con BD aún no se han ejecutado, ver "Estado de verificación"):
-  - Un fallo después de generar el token no lo expone en la respuesta 500 ni en la traza. *(Pasa.)*
-  - Volcado de todas las filas de todas las tablas tras crear y regenerar: el token no aparece. *(BD)*
-  - Con todo el logging en DEBUG, incluido el SQL, el token no aparece. *(BD)*
-  - Con el log de SQL en INFO, tampoco aparece el hash. *(BD)*
+- **Pruebas** (todas pasan, también en el CI):
+  - Un fallo después de generar el token no lo expone en la respuesta 500 ni en la traza.
+  - Volcado de todas las filas de todas las tablas tras crear y regenerar: el token no aparece.
+  - Con todo el logging en DEBUG, incluido el SQL, el token no aparece.
+  - Con el log de SQL en INFO, tampoco aparece el hash.
 
   En DEBUG SQLAlchemy registra también las filas devueltas, que incluyen el hash. Es aceptable
   solo en depuración local: el hash no permite autenticarse.
