@@ -7,12 +7,21 @@
 
 | Etapa | Implementado | Verificado |
 |---|---|---|
-| 0. Estructura, tooling, CI | Sí | Lint, tipos y arranque de la API: sí. CI: aún no ejecutado. |
-| 1. Identidad (cuentas y tokens) | Sí | Sí, contra PostgreSQL 18 local. |
-| 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí, contra PostgreSQL 18 local (incluye concurrencia y fallo a mitad de operación). |
+| 0. Estructura, tooling, CI | Sí | Sí: local y en GitHub Actions. |
+| 1. Identidad (cuentas y tokens) | Sí | Sí: PostgreSQL 18 local y en CI. |
+| 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
 | 3+. Transferencias, historial, dividir la cuenta | No | No |
 
-"Verificado" significa que la suite pasa en mi máquina; el CI aún no se ha ejecutado.
+**Integración continua:** la primera ejecución de GitHub Actions (CI #1, commit `45adf5c`)
+terminó correctamente, con PostgreSQL 18 como servicio:
+
+- Ruff (formato y lint): sin errores.
+- mypy estricto (`src`, `tests`, `migrations`): sin errores.
+- Migraciones Alembic (`upgrade head`): aplicadas.
+- pytest: **77 de 77 pruebas aprobadas**, sin pruebas saltadas (el CI usa
+  `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD).
+
+"Verificado" significa que la suite pasa en mi máquina y en el CI.
 
 ## Cómo no se pierde un peso (hasta ahora)
 
