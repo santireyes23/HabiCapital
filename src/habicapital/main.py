@@ -13,7 +13,8 @@ def create_app() -> FastAPI:
         title="HabiCapital Wallet API",
         version="0.1.0",
         description=(
-            "Billetera P2P: cuentas, cargas, transferencias, historial y cuentas divididas."
+            "Billetera P2P en pesos COP: cuentas con token Bearer, depósitos simulados, "
+            "transferencias, historial de movimientos y solicitudes de dinero entre usuarios."
         ),
     )
     register_error_handlers(app)
