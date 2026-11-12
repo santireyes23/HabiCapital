@@ -1,0 +1,165 @@
+# HabiCapital: billetera P2P
+
+> **Estado: borrador en construcción.** Este README irá creciendo por etapas. La versión final
+> responderá en primera persona los ocho puntos que pide el reto.
+
+## Estado de verificación
+
+| Etapa | Implementado | Verificado |
+|---|---|---|
+| 0. Estructura, tooling, CI | Sí | Lint, tipos y arranque de la API: sí. CI: aún no ejecutado. |
+| 1. Identidad (cuentas y tokens) | Sí | Sí, contra PostgreSQL 18 local. |
+| 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí, contra PostgreSQL 18 local (incluye concurrencia y fallo a mitad de operación). |
+| 3+. Transferencias, historial, dividir la cuenta | No | No |
+
+"Verificado" significa que la suite pasa en mi máquina; el CI aún no se ha ejecutado.
+
+## Cómo no se pierde un peso (hasta ahora)
+
+- **Dinero como entero:** pesos COP en `BIGINT`/`int`. La API rechaza `100.5`, `100.0`, `"100"` y
+  `true` (validación estricta), montos ≤ 0 y depósitos mayores a 10.000.000.
+- **Doble partida:** cada movimiento es una transacción con asientos que suman 0. Un depósito
+  debita la cuenta de sistema FUNDING (que queda en negativo) y acredita al usuario, así que la
+  suma de todos los saldos es siempre 0. Las pruebas verifican tras cada escenario que: la suma
+  global es 0, cada transacción cuadra, cada saldo es la suma de sus asientos y el último
+  `balance_after` coincide con el saldo.
+- **Atomicidad:** asientos, saldos y registro de idempotencia se confirman en un solo `COMMIT`.
+  Una prueba hace fallar la operación después de escribir los asientos y comprueba que no queda
+  nada.
+- **Concurrencia:** las cuentas se bloquean con `SELECT ... FOR UPDATE` en orden de id. La cuenta
+  autenticada se recarga al bloquearla (`populate_existing`); comprobé que sin esto la prueba de
+  30 depósitos concurrentes pierde depósitos.
+- **Idempotencia:** `Idempotency-Key` obligatoria. Reintentar con la misma clave devuelve la
+  respuesta original (`Idempotent-Replayed: true`) sin mover plata, también con 10 peticiones
+  simultáneas; reutilizarla con otro cuerpo da `422`. La clave es única por cuenta.
+- **Defensas en la BD:** `CHECK` impide saldos negativos de usuario, asientos en 0 y cuentas de
+  sistema con token (FUNDING no puede autenticarse).
+
+**Limitaciones:** todos los depósitos bloquean la fila de FUNDING, así que se serializan entre sí
+(suficiente para este alcance, un cuello de botella a escala). Solo se guardan respuestas
+exitosas para idempotencia: un rechazo no consume la clave. Los registros de idempotencia no
+expiran.
+
+API para que un grupo de personas se mueva plata entre sí sin pasar por el banco, guardando el
+contexto de cada movimiento (el cumpleaños, el arriendo, la cuenta dividida de la cena).
+
+**Stack:** Python 3.12 · FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 18 · pytest · Hypothesis ·
+uv · Ruff · mypy · Docker Compose · GitHub Actions.
+
+## Cómo ejecutarlo (Windows / PowerShell)
+
+Requisitos: [uv](https://docs.astral.sh/uv/) y Docker Desktop.
+
+```bash
+copy .env.example .env                          # configuración local (obligatoria; edítala)
+uv sync                                         # dependencias (instala Python 3.12 si falta)
+docker compose up -d db                         # PostgreSQL 18
+uv run alembic upgrade head                     # migraciones
+uv run uvicorn habicapital.main:app --reload    # API → http://localhost:8000/docs
+uv run pytest                                   # pruebas
+```
+
+Calidad: `uv run ruff format .`, `uv run ruff check .`, `uv run mypy src tests migrations`.
+
+**Sin Docker (PostgreSQL 18 instalado en Windows):** se omite `docker compose`. Hay que crear una
+vez el usuario y las dos bases que Compose crearía. Con `psql -U postgres`:
+
+```sql
+CREATE ROLE habicapital LOGIN PASSWORD 'habicapital';
+CREATE DATABASE habicapital OWNER habicapital;
+CREATE DATABASE habicapital_test OWNER habicapital;
+```
+
+**Dos bases, dos variables** (ambas en `.env` o en el entorno):
+
+| Variable | Base | La usa |
+|---|---|---|
+| `HABICAPITAL_DATABASE_URL` | `habicapital` | La API y Alembic |
+| `HABICAPITAL_TEST_DATABASE_URL` | `habicapital_test` | Solo pytest |
+
+pytest siempre usa `HABICAPITAL_TEST_DATABASE_URL` e ignora la URL de desarrollo, aunque esté
+definida. Si no se define, usa las credenciales ficticias de desarrollo. La suite se niega a ejecutarse si el nombre de la base no termina en `_test`, porque vacía las
+tablas entre pruebas. Las pruebas con BD se saltan si PostgreSQL no responde; con
+`HABICAPITAL_REQUIRE_DB=1` (así corre el CI) fallan en lugar de saltarse.
+
+**Credenciales:** todas las que aparecen en el repositorio (`habicapital`/`habicapital`) son
+ficticias, para desarrollo local y CI. La app no tiene una URL de BD por defecto: sin
+`HABICAPITAL_DATABASE_URL` no arranca.
+
+## Seguridad: autenticación y autorización
+
+El reto no exige autenticación, pero sin ella cualquiera que conozca el id de una cuenta podría
+mover su plata. Implemento un mecanismo mínimo que **simula la identidad**; no es un sistema de
+autenticación de producción.
+
+### Autenticación: ¿quién eres?
+
+- Al crear una cuenta, la API genera un **token aleatorio de 256 bits** (`secrets.token_urlsafe(32)`)
+  y lo devuelve **una única vez** en esa respuesta.
+- En la base de datos solo se guarda el **hash SHA-256** del token. SHA-256 sin sal es suficiente
+  porque el token es aleatorio y de alta entropía: no hay diccionario que atacar, a diferencia de
+  una contraseña humana (que sí necesitaría bcrypt o argon2).
+- Cada petición envía `Authorization: Bearer <token>`. Una dependencia de FastAPI calcula el hash,
+  busca la cuenta y la inyecta como cuenta actual. Sin token o con un token inválido: `401`.
+
+### Autorización: ¿puedes hacer esto?
+
+- Las operaciones sobre la propia cuenta usan rutas `/accounts/me/...`: el id de la cuenta no
+  viene en la petición, se deduce del token. Así no hay un id ajeno que manipular.
+- El origen de una transferencia es siempre la cuenta autenticada; el cuerpo solo trae el destino.
+- Cada caso de uso vuelve a comprobar el permiso en el servicio (no solo en el router):
+  - solo el acreedor gestiona su cuenta dividida;
+  - solo el deudor de un cobro puede pagarlo.
+- Un recurso ajeno responde `404`, no `403`, para no confirmar que existe.
+
+### El token nunca se persiste en claro
+
+- **Base de datos:** solo el hash. Un `CHECK` exige 64 caracteres, así que la propia BD rechaza
+  guardar algo que no sea un hash SHA-256.
+- **Idempotencia:** crear cuenta y regenerar token no pasan por los registros de idempotencia
+  (que llegarán con los depósitos). Las respuestas con token nunca se guardan para repetirlas.
+- **Logs:** no se registran cabeceras ni cuerpos de las peticiones; el token nunca se acepta en
+  la URL. El motor de BD usa `hide_parameters=True`, así que los valores de las sentencias no
+  aparecen en logs ni en mensajes de error.
+- **Cachés:** las respuestas con token llevan `Cache-Control: no-store`.
+- **Pruebas** (las marcadas con BD aún no se han ejecutado, ver "Estado de verificación"):
+  - Un fallo después de generar el token no lo expone en la respuesta 500 ni en la traza. *(Pasa.)*
+  - Volcado de todas las filas de todas las tablas tras crear y regenerar: el token no aparece. *(BD)*
+  - Con todo el logging en DEBUG, incluido el SQL, el token no aparece. *(BD)*
+  - Con el log de SQL en INFO, tampoco aparece el hash. *(BD)*
+
+  En DEBUG SQLAlchemy registra también las filas devueltas, que incluyen el hash. Es aceptable
+  solo en depuración local: el hash no permite autenticarse.
+
+### Regenerar el token
+
+`POST /accounts/me/token` (autenticado con el token actual) genera un token nuevo, reemplaza el
+hash en una sola sentencia y devuelve el token nuevo una única vez. El anterior queda inválido de
+inmediato. Sirve tanto para rotarlo como para revocar uno filtrado.
+
+El `UPDATE` solo se aplica si el hash guardado sigue siendo el del token con el que se autenticó
+la petición. Si llegan dos regeneraciones simultáneas con el mismo token, solo una emite token
+nuevo; la otra recibe `401`.
+
+No ofrezco "revocar sin reemplazo": como no hay forma de recuperar el acceso, dejaría la cuenta,
+y su saldo, inaccesible para siempre.
+
+### Limitaciones conocidas
+
+- No hay contraseñas, login ni recuperación de acceso: **quien pierde el token pierde la cuenta.**
+- **Crear cuenta no es idempotente.** Si la respuesta de `POST /accounts` se pierde y el cliente
+  reintenta, se crean dos cuentas, y la primera queda sin token conocido. Lo acepto porque una
+  cuenta nueva tiene saldo 0 y nadie conoce su id (venía en la respuesta perdida), así que nadie
+  puede enviarle plata. Hacerla idempotente exigiría guardar el token para repetir la respuesta,
+  que es justo lo que no quiero hacer.
+- **Regeneración con resultado incierto.** Si la conexión se corta después de que la BD confirma
+  el cambio pero antes de que llegue la respuesta, el token anterior ya no sirve y el nuevo nunca
+  llegó: el usuario pierde el acceso. Es poco probable y no tiene solución sin guardar el token.
+- Si alguien regenera el token antes que el dueño legítimo (porque lo robó), el dueño queda fuera.
+- Los tokens no expiran; solo se invalidan al regenerarlos.
+- Hay un solo token por cuenta, sin permisos más finos ni sesiones por dispositivo.
+- Quien obtiene el token tiene acceso total a esa cuenta.
+- No hay HTTPS en el entorno local; en producción sería obligatorio.
+- No hay límite de peticiones ni bloqueo por intentos fallidos. Con 256 bits no es práctico
+  adivinar un token, pero no hay protección contra abuso o denegación de servicio.
+- La cuenta no está ligada a una identidad verificada (no hay KYC): el nombre lo declara el usuario.
