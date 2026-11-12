@@ -10,22 +10,23 @@
 | 0. Estructura, tooling, CI | Sí | Sí: local y en GitHub Actions. |
 | 1. Identidad (cuentas y tokens) | Sí | Sí: PostgreSQL 18 local y en CI. |
 | 2. Saldo, ledger de doble partida, cuenta FUNDING, depósitos idempotentes | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia y fallo a mitad de operación). |
-| 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local (117 de 117 pruebas). En CI: pendiente del próximo push. |
+| 3. Transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
 | 4+. Historial, dividir la cuenta | No | No |
 
-**Integración continua:** las ejecuciones CI #1 (`45adf5c`) y CI #2 (`5e27c55`) de GitHub
-Actions terminaron correctamente, con PostgreSQL 18 como servicio:
+**Integración continua:** todas las ejecuciones de GitHub Actions terminaron correctamente, con
+PostgreSQL 18 como servicio:
 
-- Ruff (formato y lint): sin errores.
-- mypy estricto (`src`, `tests`, `migrations`): sin errores.
-- Migraciones Alembic (`upgrade head`): aplicadas.
-- pytest: **77 de 77 pruebas aprobadas**, sin pruebas saltadas (el CI usa
-  `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD).
+| Ejecución | Commit | Cubre | pytest |
+|---|---|---|---|
+| CI #1 | `45adf5c` | Etapas 0–2 | 77 de 77 aprobadas |
+| CI #2 | `5e27c55` | Etapas 0–2 | 77 de 77 aprobadas |
+| CI #3 | `406a471` | Etapas 0–3 | **117 de 117 aprobadas** |
 
-Esas ejecuciones cubren hasta la etapa 2. La etapa 3 pasa localmente con
-`HABICAPITAL_REQUIRE_DB=1`: **117 de 117 pruebas**, Ruff y mypy sin errores.
+En cada ejecución, Ruff (formato y lint) y mypy estricto (`src`, `tests`, `migrations`) pasaron
+sin errores, y las migraciones Alembic (`upgrade head`) se aplicaron. Ninguna prueba se saltó:
+el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que necesitan BD.
 
-"Verificado" significa que la suite pasa en mi máquina y, donde se indica, en el CI.
+"Verificado" significa que la suite pasa en mi máquina y en el CI.
 
 ## Cómo no se pierde un peso (hasta ahora)
 
