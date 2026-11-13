@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router";
 
 import { Brand } from "../components/Brand";
@@ -12,6 +12,7 @@ import {
   navRequestsIcon,
   navSendIcon,
   navTopUpIcon,
+  questionIcon,
   shieldAlertIcon,
 } from "../components/icons";
 import { useApi } from "../api/ApiContext";
@@ -28,10 +29,14 @@ export const NAV_ITEMS = [
   { to: "/solicitudes", label: "Solicitudes", icon: navRequestsIcon },
   { to: "/movimientos", label: "Movimientos", icon: navMovementsIcon },
   { to: "/cuenta", label: "Mi cuenta", icon: navAccountIcon },
+  { to: "/ayuda", label: "Ayuda", icon: questionIcon },
 ] as const;
 
-/** Estructura de las pantallas privadas: barra lateral de 280 px (Figma) y área principal. */
-export function AppShell() {
+/**
+ * Estructura de las pantallas privadas: barra lateral de 280 px (Figma) y área principal. Muestra
+ * la ruta hija (Outlet) o, para /ayuda con sesión, el contenido que recibe.
+ */
+export function AppShell({ children }: { children?: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   // El menú móvil se cierra al cambiar de ruta (se guarda la ruta en la que se abrió).
@@ -94,7 +99,7 @@ export function AppShell() {
           <UnconfirmedTokenBanner />
           <PendingCountContext value={pending.reload}>
             <Suspense fallback={<PageFallback />}>
-              <Outlet />
+              {children ?? <Outlet />}
             </Suspense>
           </PendingCountContext>
         </main>

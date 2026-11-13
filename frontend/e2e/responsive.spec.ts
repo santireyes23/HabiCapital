@@ -5,7 +5,7 @@ import { createAccountApi, depositApi, login, requestMoneyApi, type TestAccount 
 test.describe.configure({ mode: "serial" });
 
 const WIDTHS = [320, 375, 768, 1024, 1440] as const;
-const PRIVATE = ["/", "/enviar", "/recargar", "/solicitudes", "/movimientos", "/cuenta"] as const;
+const PRIVATE = ["/", "/enviar", "/recargar", "/solicitudes", "/movimientos", "/cuenta", "/ayuda"] as const;
 
 /** Elementos visibles que se salen por la derecha del viewport (sin contar los recortados a propósito). */
 async function overflow(page: Page) {
@@ -49,6 +49,10 @@ test.describe("Responsive: siete pantallas a 320, 375, 768, 1024 y 1440 px", () 
       await page.goto("/acceso");
       await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
       expect(await overflow(page), "/acceso").toEqual({ scroll: 0, offenders: [] });
+      await page.goto("/ayuda");
+      const closed = page.locator("main").getByRole("button", { expanded: false });
+      while ((await closed.count()) > 0) await closed.first().click();
+      expect(await overflow(page), "/ayuda pública").toEqual({ scroll: 0, offenders: [] });
 
       await login(page, gabriela);
       for (const path of PRIVATE) {

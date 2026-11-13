@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Link, Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 
 import { Brand } from "../../components/Brand";
 import { Icon } from "../../components/Icon";
@@ -8,6 +8,7 @@ import {
   cubeIcon,
   keyIcon,
   plusCircleIcon,
+  questionIcon,
   shieldCheckIcon,
   terminalIcon,
 } from "../../components/icons";
@@ -59,10 +60,19 @@ export function AccessPage() {
     <div className="flex min-h-screen flex-col bg-canvas">
       <header className="mx-auto flex w-full max-w-[1440px] flex-wrap items-center justify-between gap-4 px-4 py-6 sm:px-8">
         <Brand />
-        <p className="flex items-center gap-2.5 rounded-pill border border-line bg-surface px-[15px] py-[7px] text-caption font-semibold text-ink-muted">
-          <span aria-hidden className="size-2 rounded-pill bg-accent" />
-          Entorno de demostración interactiva
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <Link
+            to="/ayuda"
+            className="flex items-center gap-2 rounded-pill px-2 py-1 text-caption font-semibold text-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            <Icon src={questionIcon} size={16} />
+            ¿Necesitas ayuda?
+          </Link>
+          <p className="flex items-center gap-2.5 rounded-pill border border-line bg-surface px-[15px] py-[7px] text-caption font-semibold text-ink-muted">
+            <span aria-hidden className="size-2 rounded-pill bg-accent" />
+            Entorno de demostración interactiva
+          </p>
+        </div>
       </header>
 
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 items-center justify-center px-4 py-10 sm:px-8 lg:py-[64px]">

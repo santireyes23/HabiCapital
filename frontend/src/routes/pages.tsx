@@ -16,6 +16,7 @@ const loaders = {
   requests: () => import("../pages/requests/RequestsPage"),
   movements: () => import("../pages/movements/MovementsPage"),
   account: () => import("../pages/account/AccountPage"),
+  help: () => import("../pages/help/HelpPage"),
 };
 
 export const AccessPage = lazy(() => loaders.access().then((module) => ({ default: module.AccessPage })));
@@ -24,6 +25,7 @@ export const SendPage = lazy(() => loaders.send().then((module) => ({ default: m
 export const TopUpPage = lazy(() => loaders.topUp().then((module) => ({ default: module.TopUpPage })));
 export const RequestsPage = lazy(() => loaders.requests().then((module) => ({ default: module.RequestsPage })));
 export const MovementsPage = lazy(() => loaders.movements().then((module) => ({ default: module.MovementsPage })));
+export const HelpPage = lazy(() => loaders.help().then((module) => ({ default: module.HelpPage })));
 export const AccountPage = lazy(() => loaders.account().then((module) => ({ default: module.AccountPage })));
 
 let preloaded = false;
@@ -32,7 +34,7 @@ let preloaded = false;
 export function preloadPrivatePages(): void {
   if (preloaded) return;
   preloaded = true;
-  for (const load of [loaders.home, loaders.send, loaders.topUp, loaders.requests, loaders.movements, loaders.account]) {
+  for (const load of [loaders.home, loaders.send, loaders.topUp, loaders.requests, loaders.movements, loaders.account, loaders.help]) {
     load().catch(() => undefined);
   }
 }

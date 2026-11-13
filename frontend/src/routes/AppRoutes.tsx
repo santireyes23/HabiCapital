@@ -12,10 +12,11 @@ import {
   SendPage,
   TopUpPage,
 } from "./pages";
+import { HelpRoute } from "./HelpRoute";
 import { RequireSession } from "./RequireSession";
 
 /**
- * Mapa de rutas. /acceso es pública; el resto exige una sesión validada por el backend.
+ * Mapa de rutas. /acceso y /ayuda son públicas; el resto exige una sesión validada por el backend.
  * Cada pantalla se carga aparte (routes/pages.tsx); la barra lateral queda fija mientras tanto.
  */
 export function AppRoutes() {
@@ -29,6 +30,7 @@ export function AppRoutes() {
           </Suspense>
         }
       />
+      <Route path="/ayuda" element={<HelpRoute />} />
       <Route element={<RequireSession />}>
         <Route element={<AppShell />}>
           <Route index element={<HomePage />} />

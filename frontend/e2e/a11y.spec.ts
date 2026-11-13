@@ -13,6 +13,7 @@ const SCREENS = [
   { path: "/solicitudes", heading: "Solicitudes de dinero" },
   { path: "/movimientos", heading: "Mis movimientos" },
   { path: "/cuenta", heading: "Mi cuenta" },
+  { path: "/ayuda", heading: "Centro de ayuda" },
 ] as const;
 
 async function axe(page: Page) {
@@ -41,6 +42,16 @@ test.describe("Accesibilidad (axe, WCAG 2.2 AA) con datos reales", () => {
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     expect(await axe(page)).toEqual([]);
     await page.getByRole("tab", { name: "Ya tengo cuenta" }).click();
+    expect(await axe(page)).toEqual([]);
+  });
+
+  test("/ayuda pública con todas las respuestas abiertas, sin violaciones", async ({ page }) => {
+    await page.goto("/ayuda");
+    await expect(page.getByRole("heading", { level: 1, name: "Centro de ayuda" })).toBeVisible();
+    expect(await axe(page)).toEqual([]);
+    const closed = page.locator("main").getByRole("button", { expanded: false });
+      while ((await closed.count()) > 0) await closed.first().click();
+    await expect(closed).toHaveCount(0);
     expect(await axe(page)).toEqual([]);
   });
 
