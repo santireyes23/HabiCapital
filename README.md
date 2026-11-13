@@ -36,10 +36,9 @@ Todo el dinero es **simulado**: no hay pasarela de pagos ni dinero real.
 | Etapa 3 del backend: transferencias entre usuarios | Sí | Sí: PostgreSQL 18 local y en CI (incluye concurrencia, idempotencia y fallo a mitad de operación). |
 | Etapa 4 del backend: historial de movimientos | Sí | Sí: PostgreSQL 18 local y en CI (incluye aislamiento entre cuentas, paginación y lecturas concurrentes). |
 | Etapa 5 del backend: solicitudes de dinero | Sí | Sí: PostgreSQL 18 local y en CI (incluye permisos, idempotencia, atomicidad, concurrencia y protección de estados finales en la BD). |
-| Frontend web (siete pantallas) | Sí | Sí: local y en GitHub Actions (CI #9): 393 pruebas (Vitest) y 39 E2E (Playwright) contra FastAPI y PostgreSQL reales, con accesibilidad, responsive y seguridad. |
+| Frontend web (ocho pantallas, incluido el Centro de ayuda) | Sí | Sí: local y en GitHub Actions (último: CI #13): 403 pruebas (Vitest) y pruebas E2E (Playwright) contra FastAPI y PostgreSQL reales, con accesibilidad, responsive y seguridad. |
 
-**Integración continua** (las etapas son las de la tabla anterior; desde el CI #9 también se ejecutan los jobs `frontend` y `e2e`): todas las ejecuciones de GitHub Actions terminaron
-correctamente, con PostgreSQL 18 como servicio:
+**Integración continua** (las etapas son las de la tabla anterior; desde el CI #9 también se ejecutan los jobs `frontend` y `e2e`). Estas son las ejecuciones de GitHub Actions que registré, todas con PostgreSQL 18 como servicio:
 
 | Ejecución | Commit | Cubre | pytest |
 |---|---|---|---|
@@ -51,6 +50,7 @@ correctamente, con PostgreSQL 18 como servicio:
 | CI #6 | `0c2d16b` | Etapas 0–4 (solo cambió el README) | 144 de 144 aprobadas, 0 omitidas |
 | CI #7 | `d16ff67` | Etapas 0–5 | **330 de 330 aprobadas, 0 omitidas** |
 | CI #9 | `9c46da7` | Etapas 0–5 + frontend web (primer CI con los jobs `frontend` y `e2e`) | 330 de 330 aprobadas, 0 omitidas; además Vitest 393 de 393 y Playwright 39 aprobadas, 3 omitidas a propósito |
+| CI #13 | `5186e4c` | Etapas 0–5 + frontend web con Centro de ayuda | Backend, frontend y E2E aprobados; duración total 3 min 9 s |
 
 En cada ejecución, Ruff (formato y lint) y mypy estricto (`src`, `tests`, `migrations`) pasaron
 sin errores, y las migraciones Alembic (`upgrade head`) se aplicaron. Ninguna prueba se saltó:
@@ -58,7 +58,7 @@ el CI usa `HABICAPITAL_REQUIRE_DB=1`, que hace fallar en lugar de saltar las que
 Además, en local pasaron las 330 pruebas con `HABICAPITAL_REQUIRE_DB=1` y las migraciones desde
 cero y con downgrade (el CI solo aplica `upgrade head`).
 
-En el CI #9 los tres jobs (`checks`, `frontend` y `e2e`) terminaron correctamente; los recuentos son los de ese commit, verificado también en local.
+En el CI #9 y en el CI #13 los tres jobs (`checks`, `frontend` y `e2e`) terminaron correctamente; los recuentos del CI #9 son los de ese commit, verificado también en local. No todas las ejecuciones fueron verdes: el CI #12 falló en el job `frontend` por una prueba de Vitest inestable (esperaba un texto antes de que terminara de cargar Inicio). La corregí en `5186e4c`, cuya ejecución es el CI #13.
 
 "Verificado" significa que la suite pasa en mi máquina y en el CI.
 
@@ -79,7 +79,7 @@ pendiente.
 | — | No perder un peso | Enteros, doble partida, transacción única, bloqueos, idempotencia, `CHECK` y trigger en la BD | Todos los que mueven dinero | Recuperación de resultados inciertos con la misma clave en cada operación | Invariantes del ledger tras cada escenario de pytest y al final de las E2E (`frontend/e2e/backend.py check`); pruebas de concurrencia y de mutación | Cumplido (evidencia en [Cómo no se pierde un peso](#cómo-no-se-pierde-un-peso)) |
 | — | Entregable: repositorio público en GitHub | Repositorio `santireyes23/HabiCapital` | — | — | — | **Pendiente:** confirmar la visibilidad pública al entregar |
 | — | Entregable: README en primera persona con los ocho puntos | Este documento | — | — | — | Cumplido: [Respuestas del reto](#respuestas-del-reto) |
-| — | Entregable: video de máximo 5 minutos | — | — | — | — | **Pendiente** |
+| — | Entregable: video de máximo 5 minutos | Demo grabada (3 min 45 s): [youtu.be/RJTPof1fv3M](https://youtu.be/RJTPof1fv3M) | — | — | — | Cumplido |
 
 ## Arquitectura
 
@@ -114,6 +114,7 @@ Navegador (React SPA)  ──/api/...──►  Vite (proxy, CSP)  ──►  Fa
 | Historial de movimientos | `GET /accounts/me/movements` | Movimientos, Inicio |
 | Solicitudes de dinero | `/money-requests` | Solicitudes de dinero, Inicio |
 | Estado del servidor | `GET /health` | Indicador «Servidor FastAPI conectado» en Inicio |
+| Centro de ayuda | — | Ruta pública `/ayuda`, con o sin sesión: 17 preguntas frecuentes en cuatro categorías, en acordeones accesibles. Se abre desde la pantalla de acceso («¿Necesitas ayuda?»), el menú lateral y el menú móvil («Ayuda») |
 
 La documentación interactiva de la API está en `http://localhost:8000/docs` con el backend en
 marcha.
@@ -193,7 +194,7 @@ Con el backend en marcha, se abre la URL, se crea una cuenta y se **guarda el to
 |---|---|---|
 | Backend (330) | `uv run pytest` | `habicapital_test` |
 | Calidad del backend | `uv run ruff format --check .` · `uv run ruff check .` · `uv run mypy src tests migrations` | — |
-| Frontend (393) | `cd frontend` · `npm test` | Ninguna (backend simulado solo para pruebas) |
+| Frontend (403) | `cd frontend` · `npm test` | Ninguna (backend simulado solo para pruebas) |
 | Calidad del frontend | `npm run lint` · `npm run typecheck` · `npm run build` | — |
 | E2E (Playwright) | `cd frontend` · `npx playwright install chromium` (una vez) · `npm run test:e2e` | `habicapital_test` |
 
@@ -209,7 +210,10 @@ local `habicapital_test`, distinta de la de desarrollo, y que PostgreSQL lo conf
 y nunca se reutilizan servidores abiertos. Al terminar se verifican en la base las invariantes del
 ledger. Cubren los flujos de dinero completos, el reintento tras un corte de red con la misma
 `Idempotency-Key`, accesibilidad (axe, WCAG 2.2 AA), responsive de 320 a 1440 px y seguridad en el
-navegador. Detalle en [`frontend/README.md`](frontend/README.md#pruebas-de-extremo-a-extremo-e2e).
+navegador. El Centro de ayuda tiene sus propias pruebas de Vitest (acceso público, entrada desde la
+pantalla de acceso, el menú lateral y el menú móvil, sesión conservada, rutas privadas protegidas y
+acordeones con ratón y teclado) y está incluido en las pruebas E2E de accesibilidad y responsive.
+Detalle en [`frontend/README.md`](frontend/README.md#pruebas-de-extremo-a-extremo-e2e).
 
 ## Cómo no se pierde un peso
 
@@ -494,7 +498,7 @@ y su saldo, inaccesible para siempre.
   `X-Frame-Options: DENY`, `Permissions-Policy` y `Cross-Origin-Opener-Policy`. Sin analítica ni
   scripts externos: hasta la tipografía está autoalojada.
 - **Evidencia:** pruebas de Vitest que buscan el token en URLs, cuerpos, claves, almacenamiento,
-  DOM y consola, y una prueba E2E que recorre las siete pantallas comprobando que todo se carga del
+  DOM y consola, y una prueba E2E que recorre la pantalla de acceso y las seis privadas comprobando que todo se carga del
   mismo origen, que no hay errores de CSP y que el token no aparece fuera de `Authorization`.
 
 ## Limitaciones conocidas

@@ -2,7 +2,8 @@
 
 Interfaz web de la billetera P2P sobre la API FastAPI del repositorio. Implementa las siete
 pantallas del diseño de Figma («HabiCapital - Diseño Web»): acceso, Inicio, Enviar dinero,
-Recargar saldo, Solicitudes de dinero, Movimientos y Mi cuenta.
+Recargar saldo, Solicitudes de dinero, Movimientos y Mi cuenta, más un Centro de ayuda público
+(`/ayuda`) con preguntas frecuentes, construido con los mismos componentes y estilos.
 
 **Stack:** React 19 · TypeScript 6 (estricto) · Vite 8 · Tailwind CSS 4 · React Router 8 ·
 Vitest 5 + Testing Library · Playwright + axe-core · Manrope autoalojada.
@@ -60,7 +61,7 @@ Cubren:
 
 - **Flujos:** crear cuenta, entrar con el token, recargar, transferir entre dos cuentas, movimientos, crear, aceptar, rechazar y cancelar solicitudes, saldo insuficiente, una solicitud resuelta desde otra sesión y un token revocado.
 - **Idempotencia con un corte de red real:** la petición llega al servidor pero la respuesta no llega al navegador. El reintento usa la misma `Idempotency-Key` y no duplica el dinero.
-- **Accesibilidad:** axe (WCAG 2.2 AA) en las siete pantallas, confirmaciones y formularios, en escritorio y en móvil, más navegación con teclado.
+- **Accesibilidad:** axe (WCAG 2.2 AA) en las ocho pantallas (incluido el Centro de ayuda), confirmaciones y formularios, en escritorio y en móvil, más navegación con teclado.
 - **Responsive:** sin desbordamiento horizontal a 320, 375, 768, 1024 y 1440 px.
 - **Seguridad:**
   - cabeceras y CSP;
