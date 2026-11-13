@@ -143,7 +143,11 @@ describe("recargar saldo: operación real", () => {
     await confirm(user);
     await screen.findByRole("heading", { name: "Recarga completada" });
     await user.click(screen.getByRole("link", { name: "Volver a Inicio" }));
-    expect(await screen.findByText("+$250.000 COP")).toBeInTheDocument();
+    // Inicio se carga aparte (carga diferida): primero se espera a que esté en pantalla, y el
+    // monto se busca en sus movimientos (no en la pantalla de recarga, que se ve un instante más).
+    await screen.findByRole("heading", { name: "Tu dinero, en movimiento." });
+    const recent = await screen.findByRole("list", { name: "Últimos movimientos" });
+    expect(await within(recent).findByText("+$250.000 COP")).toBeInTheDocument();
   });
 
   it("respuesta repetida (Idempotent-Replayed): «Esta recarga ya se había aplicado»", async () => {
