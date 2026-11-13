@@ -77,7 +77,7 @@ pendiente.
 | 05 | Ver historial de movimientos | Movimientos paginados con tipo, signo, contraparte y saldo posterior | `GET /accounts/me/movements` | Movimientos (y «Movimientos recientes» en Inicio) | `tests/test_movements.py` (17, con conciliación); `movements.test.tsx`; E2E `money.spec.ts` | Cumplido |
 | — | Funcionalidad adicional | Solicitudes de dinero: crear, aceptar (paga con la misma transferencia del ledger), rechazar y cancelar | `/money-requests` (6 endpoints) | Solicitudes de dinero (y tarjetas en Inicio) | `tests/test_money_request*.py` (95); `requests.test.tsx` (70); E2E `requests.spec.ts` | Cumplido |
 | — | No perder un peso | Enteros, doble partida, transacción única, bloqueos, idempotencia, `CHECK` y trigger en la BD | Todos los que mueven dinero | Recuperación de resultados inciertos con la misma clave en cada operación | Invariantes del ledger tras cada escenario de pytest y al final de las E2E (`frontend/e2e/backend.py check`); pruebas de concurrencia y de mutación | Cumplido (evidencia en [Cómo no se pierde un peso](#cómo-no-se-pierde-un-peso)) |
-| — | Entregable: repositorio público en GitHub | Repositorio `santireyes23/HabiCapital` | — | — | — | **Pendiente:** confirmar la visibilidad pública al entregar |
+| — | Entregable: repositorio público en GitHub | [github.com/santireyes23/HabiCapital](https://github.com/santireyes23/HabiCapital) | — | — | — | Cumplido |
 | — | Entregable: README en primera persona con los ocho puntos | Este documento | — | — | — | Cumplido: [Respuestas del reto](#respuestas-del-reto) |
 | — | Entregable: video de máximo 5 minutos | Demo grabada (3 min 45 s): [youtu.be/RJTPof1fv3M](https://youtu.be/RJTPof1fv3M) | — | — | — | Cumplido |
 
